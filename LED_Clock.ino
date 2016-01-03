@@ -1,9 +1,6 @@
-// Source: https://github.com/redxeth/magiccooler
+// Source: https://github.com/redxeth/led_clock
 //
 // NOTE:  If have problems loading onto Teensy-- try higher quality USB cable!!!
-
-
-
 
 //      DIGIT 1      DIGIT 2      DIGIT 3      DIGIT 4
 
@@ -24,9 +21,9 @@
 #define LOOPDELAY 100  // time in uS during cycle (for now 40mS given 1/25 flash rate
 #define AM 0
 #define PM 1
-//#define FASTFACTOR 1
-#define FASTFACTOR 480 // how fast you want to speed up the clock, 1 means 1x real-time, 480 for testing...
-#define MODELED 13    // indicate which cycle we are in
+#define FASTFACTOR 1
+//#define FASTFACTOR 480 // how fast you want to speed up the clock, 1 means 1x real-time, 480 for testing...
+#define CYCLELED 13    // indicate which cycle we are in
 
 //time related stuff
 unsigned long startMillis;
@@ -60,6 +57,7 @@ byte colon[2]     = {0, 0}; // colon
 byte dotPM[2]     = {0,18}; // upper dot
 byte dotAM[2]     = {0,17}; // lower dot
 
+// Lookup table to help with forming numbers
 //  LED segments                 A  B  C  D  E  F  G
 byte digits[10][7] =           {{1, 1, 1, 1, 1, 1, 0},  // 0
                                 {0, 1, 1, 0, 0, 0, 0},  // 1
@@ -71,6 +69,27 @@ byte digits[10][7] =           {{1, 1, 1, 1, 1, 1, 0},  // 0
                                 {1, 1, 1, 0, 0, 0, 0},  // 7
                                 {1, 1, 1, 1, 1, 1, 1},  // 8
                                 {1, 1, 1, 0, 0, 1, 1}}; // 9
+
+// extra in case want to display letters             
+byte letters[19][7]            {{1, 1, 1, 0, 1, 1, 1},  // A
+                                {0, 0, 1, 1, 1, 1, 1},  // b
+                                {1, 0, 0, 1, 1, 1, 0},  // C
+                                {0, 1, 1, 1, 1, 0, 1},  // d
+                                {1, 0, 0, 1, 1, 1, 1},  // E
+                                {1, 0, 0, 0, 1, 1, 1},  // F
+                                {1, 0, 1, 1, 1, 1, 1},  // G
+                                {0, 1, 1, 0, 1, 1, 1},  // H
+                                {0, 1, 1, 0, 0, 0, 0},  // I
+                                {0, 1, 1, 1, 1, 0, 0},  // J
+                                {0, 0, 0, 1, 1, 1, 0},  // L
+                                {0, 0, 1, 0, 1, 0, 1},  // n
+                                {0, 0, 1, 1, 1, 0, 1},  // o
+                                {1, 1, 1, 1, 1, 1, 0},  // O                                
+                                {1, 1, 0, 0, 1, 1, 1},  // P
+                                {1, 0, 1, 1, 0, 1, 1},  // S
+                                {0, 1, 1, 1, 1, 1, 0},  // U
+                                {0, 1, 1, 1, 0, 1, 1},  // Y
+                                {1, 1, 0, 1, 1, 0, 1}};  // Z
 
 // Write out time in 2 cycles-- 
 // one cycle per thing that needs to be turned on
@@ -157,17 +176,22 @@ void displayTime(byte HH, byte MM, byte cycle) {
     }
   }
   
-  // display colon - independent of cycle (only hooked to cycle 0)
+  // display colon
+  if (colon[0] == cycle)
   digitalWrite(colon[1],HIGH);
   
-  // display AM or PM - independent of cycle
-  // (they are both hooked to cycle 0)
-  if (AMPM) {   // PM
+  // display AM or PM
+  if (dotPM[0] == cycle) {
+    if (AMPM)     // PM
     digitalWrite(dotPM[1],HIGH);
-    digitalWrite(dotAM[1],LOW);
-  } else {         // AM
+    else          // AM
     digitalWrite(dotPM[1],LOW);
+  }
+  if (dotAM[0] == cycle) {
+    if (!AMPM)     // AM
     digitalWrite(dotAM[1],HIGH);    
+    else           // PM
+      digitalWrite(dotAM[1],LOW);    
   }
   
 }
@@ -189,13 +213,12 @@ void setup() {
     digitalWrite(pos[i],LOW);   
   }
   // mode LED
-  pinMode(MODELED, OUTPUT);
+  pinMode(CYCLELED, OUTPUT);
   startMillis = millis();
  }
 
-// the loop routine runs over and over again forever
-// basically like main with while(1).
-void loop() { 
+
+void measureTime() {
   unsigned long currentMillis = millis();
   unsigned long secElapsed = ((currentMillis - startMillis) * FASTFACTOR  / 1000); //figure time in seconds elapsed since program start
   unsigned long minElapsed = (secElapsed / 60);                                    // note that remainder seconds are truncated
@@ -206,6 +229,13 @@ void loop() {
 
   // calc current minutes    
   timeMM = (minElapsed - ((minElapsed/60)*60) + startTimeMM) % 60; // results in 0-59
+}
+
+// the loop routine runs over and over again forever
+// basically like main with while(1).
+void loop() { 
+  // update the current time values for timeHH, timeMM
+  measureTime();
     
   // display time based on which cycle, odd or even, we are in
   displayTime(timeHH,timeMM,loopCycle);
@@ -213,11 +243,11 @@ void loop() {
   // determine cycle for later calc  
   if (loopCycle == 1) {
     if (DEBUGME == 1) 
-      digitalWrite(MODELED,HIGH);
+      digitalWrite(CYCLELED,HIGH);
     loopCycle = 0;
   } else {
     if (DEBUGME == 1)
-      digitalWrite(MODELED,LOW);
+      digitalWrite(CYCLELED,LOW);
     loopCycle = 1;
   }
   
