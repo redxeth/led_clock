@@ -18,19 +18,24 @@
 
 #define NUM_NEG 3     // number of cathode pins
 #define NUM_POS 15    // number of anode pins
-#define LOOPDELAY 100  // time in uS during cycle (for now 40mS given 1/25 flash rate
+#define LOOPDELAY 8000  // time in uS for each cycle, effectively the refresh rate
+                      // Will use 125 fps (8000uS delay) which 'looks' pretty good.
+                      // Making faster is possible but you start to have LEDs not fully turning off between cycles.
+                      // see here some human eye fps info: http://www.100fps.com/how_many_frames_can_humans_see.htm
 #define AM 0
 #define PM 1
-#define FASTFACTOR 1
-//#define FASTFACTOR 480 // how fast you want to speed up the clock, 1 means 1x real-time, 480 for testing...
+#define FASTFACTOR 1   // set to 1 for 'real time', set to 480 typically for debug (8x per second)
 #define CYCLELED 13    // indicate which cycle we are in
+
+#define MODE 0         // mode want to run:  
+                       // 0 = clock from starting time
+                       // 1 = second/minute time counter
 
 //time related stuff
 unsigned long startMillis;
-byte startTimeHH = 12;
-byte startTimeMM = 00;
+byte startTimeHH = 16;
+byte startTimeMM = 55;
 byte startTimeSS = 00;
-byte startTimeAMPM = AM;
 
 byte timeHH, timeMM, timeSS, timeAMPM; // current time
 byte loopCycle = 0;
@@ -91,16 +96,71 @@ byte letters[19][7]            {{1, 1, 1, 0, 1, 1, 1},  // A
                                 {0, 1, 1, 1, 0, 1, 1},  // Y
                                 {1, 1, 0, 1, 1, 0, 1}};  // Z
 
+// displayDigit
+// display a value to the display
+void displayDigit(byte digit, byte value, byte cycle) { 
+  switch(digit) {
+     case 1:
+       // HOUR 10s DIGIT
+       // set all segments in digit on or off depending on if cycle matches AND digit "1" is needed
+       // if cycle doesn't match, do nothing as anode may be used for a different thing
+       for (int i=0; i < 2; i++) {
+         if (HR_10s[i][0] == cycle) {            // only change anything if in this cycle
+           if (value == 1)                       // if 1 digit needed, turn on segment
+             digitalWrite(HR_10s[i][1],HIGH);
+           else                                  // if 1 digit not needed, turn off segment
+             digitalWrite(HR_10s[i][1],LOW);
+         }
+       }
+       break;
+     case 2:
+       // HOUR 1s DIGIT
+       for (int i=0; i < 7; i++) {
+         if (HR_1s[i][0] == cycle) {            // only change anything if in this cycle
+           if (digits[value][i] == 1)           // if needed, turn on segment
+             digitalWrite(HR_1s[i][1],HIGH);
+           else                                 // if not needed, turn off segment
+             digitalWrite(HR_1s[i][1],LOW);
+         }
+       }
+       break;
+     case 3:
+       // MINUTES 10s DIGIT
+       for (int i=0; i < 7; i++) {
+         if (MIN_10s[i][0] == cycle) {          // only change anything if in this cycle
+           if (digits[value][i] == 1)       // if needed, turn on segment
+             digitalWrite(MIN_10s[i][1],HIGH);
+           else                                 // if not needed, turn off segment
+             digitalWrite(MIN_10s[i][1],LOW);
+         }
+       }
+       break;
+     case 4:
+       for (int i=0; i < 7; i++) {
+         if (MIN_1s[i][0] == cycle) {           // only change anything if in this cycle
+           if (digits[value][i] == 1)        // if needed, turn on segment
+             digitalWrite(MIN_1s[i][1],HIGH);
+           else                                 // if not needed, turn off segment
+             digitalWrite(MIN_1s[i][1],LOW);
+         }
+       }     
+       break; 
+  }
+}
+
 // Write out time in 2 cycles-- 
 // one cycle per thing that needs to be turned on
 // instead of doing it by digit.  Determine which
-// segments are active based on digits, but generally
-// be cycling through the digits no matter what
+// segments are active based on digits that need to
+// be displayed, but generally be cycling through the
+// digits no matter what
 //
+// HH   : hours in 24 hour format (0-23)
+// MM   : minutes (0-59)
 // cycle: 0  (even cycle)
 //        1  (odd cycle)
 //
-void displayTime(byte HH, byte MM, byte cycle) {
+void displayCurrentTime(byte HH, byte MM, byte cycle) {
 
   // HH comes in 24 hour mode, i.e. 0-23:
   // 24 HR   =>  12 HR
@@ -125,61 +185,44 @@ void displayTime(byte HH, byte MM, byte cycle) {
     Serial.printf("      HR10s_dig: %i, HR1s_dig: %i, hh12: %i\r\n", HR10s_dig, HR1s_dig, hh12);
   }
   
- // cathode pins - enable or disable based on even or odd cycle
-  for (int i=0; i < NUM_NEG; i++) {
-    if ( i % 2 == cycle ) { // turn on those matching cycle
-      digitalWrite(neg[i],LOW);
-    } else {                // turn off those not matching cycle
-      digitalWrite(neg[i],HIGH);
-    }
+  // Display time digits
+  displayDigit(1, HR10s_dig, cycle);
+  displayDigit(2, HR1s_dig, cycle);
+  displayDigit(3, MM10s_dig, cycle);
+  displayDigit(4, MM1s_dig, cycle);
+  
+  // display colon
+  displayColon(cycle);
+  
+  // display AM or PM 
+  displayAMPM(AMPM, cycle);
+  
   } 
   
-  // HOUR 10s DIGIT
-  // set all segments in digit on or off depending on if cycle matches AND digit "1" is needed
-  // if cycle doesn't match, do nothing as anode may be used for a different thing
-  for (int i=0; i < 2; i++) {
-    if (HR_10s[i][0] == cycle) {            // only change anything if in this cycle
-      if (HR10s_dig == 1)                   // if 1 digit needed, turn on segment
-        digitalWrite(HR_10s[i][1],HIGH);
-      else                                  // if 1 digit not needed, turn off segment
-        digitalWrite(HR_10s[i][1],LOW);
-    }
+  
+// updates global variables timeHH and timeMM with current time
+// calculated from device boot relativer to starting time above
+void measureCurrentHHMM() {
+  unsigned long currentMillis = millis();
+  unsigned long secElapsed = ((currentMillis - startMillis) * FASTFACTOR  / 1000); // figure time in seconds elapsed since program start
+  unsigned long minOfDay = (((secElapsed / 60) + (startTimeHH*60) + startTimeMM) % 1440);    // figure the time of day in minutes (0 to 1439)
+  
+  // calc current minutes
+  timeMM = (minOfDay % 60); // 0 - 59
+  
+  // calc current hour
+  // use 24-hour time, convert when displaying back to 12-hour w/ AM/PM set
+  timeHH = (minOfDay / 60); // 0 - 23, no need to do mod 24 since minOfDay limited via mod 1440 already.
+  
   }
   
-  // HOUR 1s DIGIT
-  for (int i=0; i < 7; i++) {
-    if (HR_1s[i][0] == cycle) {            // only change anything if in this cycle
-      if (digits[HR1s_dig][i] == 1)        // if needed, turn on segment
-        digitalWrite(HR_1s[i][1],HIGH);
-      else                                 // if not needed, turn off segment
-       digitalWrite(HR_1s[i][1],LOW);
-    }
-  }
-  
-  // MINUTES 10s DIGIT
-  for (int i=0; i < 7; i++) {
-    if (MIN_10s[i][0] == cycle) {          // only change anything if in this cycle
-      if (digits[MM10s_dig][i] == 1)       // if needed, turn on segment
-        digitalWrite(MIN_10s[i][1],HIGH);
-      else                                 // if not needed, turn off segment
-        digitalWrite(MIN_10s[i][1],LOW);
-    }
-  }
-  
-  // MINUTES 1s DIGIT
-  for (int i=0; i < 7; i++) {
-    if (MIN_1s[i][0] == cycle) {           // only change anything if in this cycle
-      if (digits[MM1s_dig][i] == 1)        // if needed, turn on segment
-        digitalWrite(MIN_1s[i][1],HIGH);
-      else                                 // if not needed, turn off segment
-        digitalWrite(MIN_1s[i][1],LOW);
-    }
-  }
-  
+void displayColon(byte cycle) {
   // display colon
   if (colon[0] == cycle)
   digitalWrite(colon[1],HIGH);
+}
   
+void displayAMPM(byte AMPM, byte cycle) {
   // display AM or PM
   if (dotPM[0] == cycle) {
     if (AMPM)     // PM
@@ -193,6 +236,25 @@ void displayTime(byte HH, byte MM, byte cycle) {
     else           // PM
       digitalWrite(dotAM[1],LOW);    
   }
+}
+
+void displayElapsedMMSS(byte cycle) {
+  unsigned long currentMillis = millis();
+  unsigned long secElapsed = ((currentMillis - startMillis) * FASTFACTOR  / 1000); //figure time in seconds elapsed since program start
+  unsigned long minElapsed = (secElapsed / 60);                                    // note that remainder seconds are truncated
+  
+  byte dig1 = ((minElapsed % 20) / 10); // 0 or 1
+  byte dig2  = ((minElapsed % 20) % 10); // 0 - 9
+  byte dig3 = ((secElapsed % 60) / 10);
+  byte dig4  = ((secElapsed % 60) % 10); 
+  
+  // Display time digits
+  displayDigit(1, dig1, cycle);
+  displayDigit(2, dig2, cycle);
+  displayDigit(3, dig3, cycle);
+  displayDigit(4, dig4, cycle); 
+
+  displayColon(cycle);
   
 }
 
@@ -217,30 +279,42 @@ void setup() {
   startMillis = millis();
  }
 
-
-void measureTime() {
-  unsigned long currentMillis = millis();
-  unsigned long secElapsed = ((currentMillis - startMillis) * FASTFACTOR  / 1000); //figure time in seconds elapsed since program start
-  unsigned long minElapsed = (secElapsed / 60);                                    // note that remainder seconds are truncated
-  
-  // calc current hour
-  // use 24-hour time, convert when displaying back to 12-hour w/ AM/PM set
-  timeHH = ((minElapsed/60) + startTimeHH) % 24;                   // results in 0-23
-
-  // calc current minutes    
-  timeMM = (minElapsed - ((minElapsed/60)*60) + startTimeMM) % 60; // results in 0-59
-}
-
 // the loop routine runs over and over again forever
 // basically like main with while(1).
-void loop() { 
+//
+// DH TBD
+// add functionality to sync the time with PC when program is started!
+// maybe bluetooth??
+// add alarm 
+// add countdown feature
+//
+void loop() {
+  // each loop through we alternate 'cycle' which is 
+  // how we drive the 4-digit 7-segment LED display
+
+  // cathode pins - enable or disable based on even or odd cycle
+  for (int i=0; i < NUM_NEG; i++) {
+    if ( i % 2 == loopCycle ) { // turn on those matching cycle
+      digitalWrite(neg[i],LOW);
+    } else {                // turn off those not matching cycle
+      digitalWrite(neg[i],HIGH);
+    }
+}
+
+  // now display what we want
+  switch (MODE) {
+    case 0:  // DISPLAY CURRENT TIME
   // update the current time values for timeHH, timeMM
-  measureTime();
-    
+      measureCurrentHHMM();
   // display time based on which cycle, odd or even, we are in
-  displayTime(timeHH,timeMM,loopCycle);
+      displayCurrentTime(timeHH,timeMM,loopCycle);
+      break;
+    case 1:
+      displayElapsedMMSS(loopCycle);
+      break; 
+  }
   
-  // determine cycle for later calc  
+  // determine cycle for next iteration of loop()
   if (loopCycle == 1) {
     if (DEBUGME == 1) 
       digitalWrite(CYCLELED,HIGH);
@@ -251,6 +325,7 @@ void loop() {
     loopCycle = 1;
   }
   
+  // optional delay for display purposes
   if (DEBUGME == 1) 
     delay(1000);
   else
