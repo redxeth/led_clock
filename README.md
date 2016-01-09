@@ -9,8 +9,8 @@ I wasn't given the directions on how to hook up the LED display.  Through trial 
 
 In addition, I was able to find the spec for the chip in the alarm clock that serves as the 'brains' of the alarm clock, the LM8560 alarm clock driver chip.  Inspecting how the LED display was wired to the pins on this chip (following PCB traces) helped also further determine not only the wiring but a strategy for driving the display more efficiently than I did initially.
 
-- [See Google sheet I used in figuring out LED segment connections](https://docs.google.com/spreadsheets/d/1uvN9qPjFpo4JUEpYhtVIMktASHFhyrPmAeeo7BXrQFY/edit?usp=sharing)
-- [See spec for UTM LM8560 alarm clock chip](http://www.paulanders.com/G5-LED/ver1/datablad.pdf)
+- Doc used in figuring out LED segment: [RevEng LED Display](https://docs.google.com/spreadsheets/d/1uvN9qPjFpo4JUEpYhtVIMktASHFhyrPmAeeo7BXrQFY/edit?usp=sharing)
+- [See spec found for UTM LM8560 alarm clock chip](http://www.paulanders.com/G5-LED/ver1/datablad.pdf)
 
 ## To Do
 - Add shift register to permit using fewer GPIO pins and increase drive current and voltage to LEDs
@@ -27,6 +27,7 @@ The code strategy is basically this:
 - We control the refresh rate of the display by basically controlling the delay at the end of the main loop.
 - We calculate current seconds elapsed since device has been booted.
 - We hard-code (for now) the starting time in minutes and hours and calculate the current time from that.  It is easier to calculate the time intially in 24-hr format then go to 12hr format.  With this particular display we have no choice to go with 12hr format as the first digit only has 2 LED segments connected to the external pins.  (The other segments in that digit appear to be there but no traces go from them to the main PCB under the display.  If I really wanted to, I could probably access them, but it may end up destroying the board and not really be worth it!).
+- Time calculations confirmed here after bug observation:  [LED Clock Calc](https://docs.google.com/spreadsheets/d/1AGfdZcArP2Lh3Z_iyezs5KHuu6UdL8kZsu7qiKoQKi4/edit?usp=sharing)
 - Added debug option to support accelerated time so we can check that 'roll overs' occur properly-- added FASTFACTOR in code to server to multiply the milliseconds elapsed so we don't truncate seconds too quickly.
 - Added debug option to have some stuff go to serial port if desired to check on calculations.
 - Added a new mode to support calculating up from 0 and show minutes and seconds instead.
