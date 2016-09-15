@@ -12,10 +12,14 @@ In addition, I was able to find the spec for the chip in the alarm clock that se
 - Doc used in figuring out LED segment: [RevEng LED Display](https://docs.google.com/spreadsheets/d/1uvN9qPjFpo4JUEpYhtVIMktASHFhyrPmAeeo7BXrQFY/edit?usp=sharing)
 - [See spec found for UTM LM8560 alarm clock chip](http://www.paulanders.com/G5-LED/ver1/datablad.pdf)
 
+## Recent Updates
+- (9/14/16) Added 2 pushbuttons to serve to set the hours and minutes on the clock-- as wasn't getting around to other sync possibilites and it was quick.
+- Added Teensy breakout board to permit using more GPIOs, access the reset pin.  [Teensy 3.1 Breakout Board](https://www.tindie.com/products/loglow/teensy-31-breakout/).  The kit also comes with a crystal so can try to implement RTC next.
+
 ## To Do
 - Add shift register to permit using fewer GPIO pins and increase drive current and voltage to LEDs
 - Add RTC (real time clock) functionality so circuit can more accurately measure time
-- Had thought about adding buttons and switches to permit setting the time, setting an alarm, choosing the mode, etc. but that's so last century... instead will add bluetooth serial capability so can interface the Teensy to an Android app so you can set the time.
+- Had thought about adding buttons and switches to permit setting the time, setting an alarm, choosing the mode, etc. but that's so last century... (ok you'll note I recently added this- it was quick and clock was always sitting there with the wrong time) instead will add bluetooth serial capability so can interface the Teensy to an Android app so you can set the time.
 - Another possibility is to have wifi capability on the clock so the time can be set via the internet in some way but that may require a different driver chip that has built-in wifi instead.
 - Add countdown timer based both on starting time (count to 0) and time left until a specific time (delta from future time)
 
