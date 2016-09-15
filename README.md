@@ -15,6 +15,7 @@ In addition, I was able to find the spec for the chip in the alarm clock that se
 ## Recent Updates
 - (9/14/16) Added 2 pushbuttons to serve to set the hours and minutes on the clock-- as wasn't getting around to other sync possibilites and it was quick.
 - Added Teensy breakout board to permit using more GPIOs, access the reset pin.  [Teensy 3.1 Breakout Board](https://www.tindie.com/products/loglow/teensy-31-breakout/).  The kit also comes with a crystal so can try to implement RTC next.
+- Mounted the clock for display, check out an [image](https://cloud.githubusercontent.com/assets/5686085/18534609/9cc37466-7ab2-11e6-8b8d-1f162deb31f1.jpg). \(next to a clock my son and I made in a wooden cube, got this from youtube video [here](https://www.youtube.com/watch?v=2P-8-zd7sXg) \). 
 
 ## To Do
 - Add shift register to permit using fewer GPIO pins and increase drive current and voltage to LEDs
