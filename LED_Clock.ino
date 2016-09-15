@@ -30,11 +30,26 @@
 #define MODE 0         // mode want to run:  
                        // 0 = clock from starting time
                        // 1 = second/minute time counter
+// pushbuttons
+#define HH_BUTTON 22   // Teensy pin connected to HH button
+#define MM_BUTTON 21   // Teensy pin connected to MM button
+
+// Button stuff
+int HHReading;                                    // a reading off the HH set button (not yet used to set the state)
+int MMReading;                                    // a reading off the MM set button (not yet used to set the state)
+int HHButtonState;                                // current reading on HH button
+int MMButtonState;                                // current reading on MM button
+int lastHHButtonState = HIGH;                     // last reading on HH button
+int lastMMButtonState = HIGH;                     // last reading on MM button
+long lastHHDebounceTime = 0;                      // last time HH button was toggled
+long lastMMDebounceTime = 0;                      // last time MM button was toggled
+long debounceDelay = 50;                          // debounce time in mS
+
 
 //time related stuff
-unsigned long startMillis;
-byte startTimeHH = 16;
-byte startTimeMM = 55;
+unsigned long startMillis;  // 0 to 4,294,967,295 (2^32 - 1).  Will count for up to 8 years before a problem...
+byte startTimeHH = 00;      // can adjust via HH button
+byte startTimeMM = 00;      // can adjust via MM button
 byte startTimeSS = 00;
 
 byte timeHH, timeMM, timeSS, timeAMPM; // current time
@@ -162,6 +177,9 @@ void displayDigit(byte digit, byte value, byte cycle) {
 //
 void displayCurrentTime(byte HH, byte MM, byte cycle) {
 
+  char buffer [80];
+  int n;
+
   // HH comes in 24 hour mode, i.e. 0-23:
   // 24 HR   =>  12 HR
   // 0           12am
@@ -181,8 +199,11 @@ void displayCurrentTime(byte HH, byte MM, byte cycle) {
   boolean AMPM = (HH > 11); // true if PM
   
   if (DEBUGME == 1) {
-    Serial.printf("Cycle: %i, HH: %2i, MM: %2i\r\n", cycle, HH, MM);
-    Serial.printf("      HR10s_dig: %i, HR1s_dig: %i, hh12: %i\r\n", HR10s_dig, HR1s_dig, hh12);
+    n = sprintf (buffer, "Cycle: %i, HH: %2i, MM: %2i\r\n", cycle, HH, MM);
+    Serial.println (buffer);
+    
+    n = sprintf( buffer, "      HR10s_dig: %i, HR1s_dig: %i, hh12: %i\r\n", HR10s_dig, HR1s_dig, hh12);
+    Serial.println (buffer);
   }
   
   // Display time digits
@@ -201,7 +222,7 @@ void displayCurrentTime(byte HH, byte MM, byte cycle) {
   
   
 // updates global variables timeHH and timeMM with current time
-// calculated from device boot relativer to starting time above
+// calculated from device boot relative to starting time above
 void measureCurrentHHMM() {
   unsigned long currentMillis = millis();
   unsigned long secElapsed = ((currentMillis - startMillis) * FASTFACTOR  / 1000); // figure time in seconds elapsed since program start
@@ -258,11 +279,77 @@ void displayElapsedMMSS(byte cycle) {
   
 }
 
+// handle reading the button, debounce
+// causes modeState to change
+void buttonStuff() {
+  // read current state of pushbuttons
+  HHReading = digitalRead(HH_BUTTON);
+  MMReading = digitalRead(MM_BUTTON);
+ 
+  // If the switch changed, due to noise or pressing:
+  if (HHReading != lastHHButtonState) {
+    // reset the debouncing timer
+    lastHHDebounceTime = millis();
+  }
+  // If the switch changed, due to noise or pressing:
+  if (MMReading != lastMMButtonState) {
+    // reset the debouncing timer
+    lastMMDebounceTime = millis();
+  }
+    
+  if ((millis() - lastHHDebounceTime) > debounceDelay) {
+    // whatever the reading is at, it's been there for longer
+    // than the debounce delay, so take it as the actual current state:
+
+    // if the button state has changed:
+    if (HHReading != HHButtonState) {
+      // then change current buttonState
+      HHButtonState = HHReading;
+
+      // only change HH if the new button state is LOW
+      if (HHButtonState == LOW) {
+        startTimeHH += 1;
+      }
+    }
+  }
+  if ((millis() - lastMMDebounceTime) > debounceDelay) {
+    // whatever the reading is at, it's been there for longer
+    // than the debounce delay, so take it as the actual current state:
+
+    // if the button state has changed:
+    if (MMReading != MMButtonState) {
+      // then change current buttonState
+      MMButtonState = MMReading;
+
+      // only change MM if the new button state is LOW
+      if (MMButtonState == LOW) {
+        startTimeMM += 1;
+      }
+    }
+  }
+
+  
+  // save the reading.  Next time through the loop,
+  // it'll be the lastHHButtonState:
+  lastHHButtonState = HHReading;
+  // save the reading.  Next time through the loop,
+  // it'll be the lastMMButtonState:
+  lastMMButtonState = MMReading;
+}
+
 // initial setup for inputs/outputs
 void setup() {
+  startMillis = millis();
+//  startTimeHH = hour();
+//  startTimeMM = minutes();
+  
   if (DEBUGME == 1) {
     Serial.begin(9600);
   }
+
+  pinMode(HH_BUTTON, INPUT);
+  pinMode(MM_BUTTON, INPUT);
+
   // set outputs and turn all off
   // cathode pins
   for (int i=0; i < NUM_NEG; i++) {
@@ -276,7 +363,7 @@ void setup() {
   }
   // mode LED
   pinMode(CYCLELED, OUTPUT);
-  startMillis = millis();
+
  }
 
 // the loop routine runs over and over again forever
@@ -289,6 +376,10 @@ void setup() {
 // add countdown feature
 //
 void loop() {
+
+  // read buttons, adjust time if necessary
+  buttonStuff();
+  
   // each loop through we alternate 'cycle' which is 
   // how we drive the 4-digit 7-segment LED display
 
